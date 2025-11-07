@@ -1,0 +1,62 @@
+[workspace]
+members = [
+    "deribit-rs",
+    # "bin/orderbook-collector",
+    # "bin/trade-collector",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2.0.17"
+
+# Configuration
+config = "0.15.18"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Kafka
+rdkafka = { version = "0.38.0", features = ["tokio","cmake-build"] }
+
+clickhouse-rs = "0.1.21"
+reqwest = { version = "0.12.24", features = ["json"] }
+redis = "0.32.7"
+
+
+# Time
+chrono = "0.4"
+
+[package]
+name = "market-data"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deribit = { path = "deribit-rs" }
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+async-stream = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rdkafka = { workspace = true }
+redis = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+clickhouse-rs = { workspace = true }
