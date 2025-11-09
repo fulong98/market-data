@@ -140,9 +140,9 @@ pub enum MarketData {
 pub trait Exchange: Send + Sync {
     fn name(&self) -> &str;
 
-    fn subscribe(&mut self, symbols: &[String]) -> Result<()>;
+    async fn subscribe(&mut self, symbols: &[String]) -> Result<()>;
 
-    fn unsubscribe(&mut self, symbols: &[String]) -> Result<()>;
+    async fn unsubscribe(&mut self, symbols: &[String]) -> Result<()>;
 
     async fn connect_orderbook(&mut self) -> Result<BoxStream<'static, Result<MarketData>>>;
 

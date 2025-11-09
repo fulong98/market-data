@@ -1,10 +1,12 @@
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::time::Duration;
+use crate::config::KafkaConfig;
 use crate::errors::{Result, MarketDataError};
 use crate::exchanges::deribit::models::MarketData;
 use tracing::{debug, error};
 
+#[derive(Clone)]
 pub struct KafkaProducer {
     client: FutureProducer,
     orderbook_topic: String,
@@ -20,10 +22,10 @@ pub struct KafkaProducerConfig {
 }
 
 impl KafkaProducer {
-    pub fn new(config: KafkaProducerConfig) -> Result<Self> {
+    pub fn new(config: KafkaConfig) -> Result<Self> {
         let client: FutureProducer = ClientConfig::new()
-            .set("bootstrap.servers", &config.brokers)
-            .set("message.timeout.ms", "5000")
+            .set("bootstrap.servers", &config.bootstrap_servers)
+            .set("message.timeout.ms", &config.producer.timeout_ms.to_string())
             .create()
             .map_err(|e| MarketDataError::KafkaError(e))?;
 

@@ -3,6 +3,7 @@ use crate::errors::Result;
 use crate::exchanges::deribit::models::MarketData;
 use tracing::info;
 
+#[derive(Clone)]
 pub struct RedisStorage {
     client: Client,
 }
@@ -13,7 +14,7 @@ impl RedisStorage {
         Ok(Self { client })
     }
 
-    pub fn update_latest_data(&self, data: &MarketData) -> Result<()> {
+    pub async fn update_latest_data(&self, data: &MarketData) -> Result<()> {
         let mut con = self.client.get_connection()?;
 
         match data {

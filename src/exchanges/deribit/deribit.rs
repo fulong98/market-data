@@ -8,9 +8,10 @@ use deribit::{
         subscription::{
             GroupedBookData, PublicSubscribeRequest, PublicUnsubscribeRequest, SubscriptionData,
             SubscriptionMessage, SubscriptionParams, TickerData as DeribitTickerData,
-            TradesData as DeribitTradesData,
+            TradesData as DeribitTradesData, HeartbeatType,
         },
         session_management::SetHeartbeatRequest,
+        TestRequest,
     },
     DeribitAPIClient, DeribitSubscriptionClient,
 };
@@ -240,26 +241,20 @@ impl Exchange for Deribit {
         "deribit"
     }
 
-    fn subscribe(&mut self, symbols: &[String]) -> Result<()> {
+    async fn subscribe(&mut self, symbols: &[String]) -> Result<()> {
         // Store symbols for later use
-        let runtime = tokio::runtime::Handle::current();
-        runtime.block_on(async {
-            let mut subscribed = self.subscribed_symbols.write().await;
-            for symbol in symbols {
-                subscribed.insert(symbol.clone());
-            }
-        });
+        let mut subscribed = self.subscribed_symbols.write().await;
+        for symbol in symbols {
+            subscribed.insert(symbol.clone());
+        }
         Ok(())
     }
 
-    fn unsubscribe(&mut self, symbols: &[String]) -> Result<()> {
-        let runtime = tokio::runtime::Handle::current();
-        runtime.block_on(async {
-            let mut subscribed = self.subscribed_symbols.write().await;
-            for symbol in symbols {
-                subscribed.remove(symbol);
-            }
-        });
+    async fn unsubscribe(&mut self, symbols: &[String]) -> Result<()> {
+        let mut subscribed = self.subscribed_symbols.write().await;
+        for symbol in symbols {
+            subscribed.remove(symbol);
+        }
         Ok(())
     }
 
@@ -285,12 +280,24 @@ impl Exchange for Deribit {
         self.start_dynamic_subscription_handler().await;
 
         let subscription_client = self.subscription_client.clone();
+        let api_client = self.api_client.clone();
 
         let stream = async_stream::stream! {
             let mut sub_client = subscription_client.write().await;
 
             while let Some(message_result) = sub_client.next().await {
                 match message_result {
+                    Ok(SubscriptionMessage {
+                        params: SubscriptionParams::Heartbeat { r#type: HeartbeatType::TestRequest },
+                        ..
+                    }) => {
+                        // Respond to heartbeat test request
+                        debug!("Received heartbeat test request, responding...");
+                        let mut api = api_client.write().await;
+                        if let Err(e) = api.call(TestRequest::default()).await {
+                            debug!("Failed to respond to heartbeat: {:?}", e);
+                        }
+                    }
                     Ok(SubscriptionMessage {
                         params: SubscriptionParams::Subscription(SubscriptionData::GroupedBook(data)),
                         ..
@@ -354,12 +361,24 @@ impl Exchange for Deribit {
         self.subscribe_channels(channels).await?;
 
         let subscription_client = self.subscription_client.clone();
+        let api_client = self.api_client.clone();
 
         let stream = async_stream::stream! {
             let mut sub_client = subscription_client.write().await;
 
             while let Some(message_result) = sub_client.next().await {
                 match message_result {
+                    Ok(SubscriptionMessage {
+                        params: SubscriptionParams::Heartbeat { r#type: HeartbeatType::TestRequest },
+                        ..
+                    }) => {
+                        // Respond to heartbeat test request
+                        debug!("Received heartbeat test request, responding...");
+                        let mut api = api_client.write().await;
+                        if let Err(e) = api.call(TestRequest::default()).await {
+                            debug!("Failed to respond to heartbeat: {:?}", e);
+                        }
+                    }
                     Ok(SubscriptionMessage {
                         params: SubscriptionParams::Subscription(SubscriptionData::Trades(data)),
                         ..
@@ -415,12 +434,24 @@ impl Exchange for Deribit {
         self.subscribe_channels(channels).await?;
 
         let subscription_client = self.subscription_client.clone();
+        let api_client = self.api_client.clone();
 
         let stream = async_stream::stream! {
             let mut sub_client = subscription_client.write().await;
 
             while let Some(message_result) = sub_client.next().await {
                 match message_result {
+                    Ok(SubscriptionMessage {
+                        params: SubscriptionParams::Heartbeat { r#type: HeartbeatType::TestRequest },
+                        ..
+                    }) => {
+                        // Respond to heartbeat test request
+                        debug!("Received heartbeat test request, responding...");
+                        let mut api = api_client.write().await;
+                        if let Err(e) = api.call(TestRequest::default()).await {
+                            debug!("Failed to respond to heartbeat: {:?}", e);
+                        }
+                    }
                     Ok(SubscriptionMessage {
                         params: SubscriptionParams::Subscription(SubscriptionData::Ticker(data)),
                         ..
