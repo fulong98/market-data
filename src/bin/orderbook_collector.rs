@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     };
 
     let kafka_producer = KafkaProducer::new(config.kafka.clone())?;
-    let redis_storage = RedisStorage::new(&config.redis.url)?;
+    let redis_storage = RedisStorage::new(&config.redis).await?;
 
     // Spawn health check server
     let health_port = config.health_check.port;
@@ -69,12 +69,16 @@ async fn main() -> Result<()> {
                     Ok(market_data) => {
                         info!("Received market data: {:?}", market_data);
 
-                        if let Err(e) = redis_storage.update_latest_data(&market_data).await {
-                            error!("Failed to update Redis: {}", e);
-                        }
+                        let (redis_result, kafka_result) = tokio::join!(
+                            redis_storage.update_latest_data(&market_data),
+                            kafka_producer.send_market_data(&market_data)
+                        );
 
-                        if let Err(e) = kafka_producer.send_market_data(&market_data).await {
-                            error!("Failed to send to kafka: {}", e);
+                        if let Err(e) = redis_result {
+                            error!("Redis update failed after retries: {}", e);
+                        }
+                        if let Err(e) = kafka_result {
+                            error!("Kafka send failed after retries: {}", e);
                         }
                     }
                     Err(e) => {

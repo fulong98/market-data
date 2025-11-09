@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example: Send a message to Kafka
     let event = LogEvent {
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        timestamp: {
+            use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+            OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| String::from("unknown"))
+        },
         level: "INFO".to_string(),
         message: "Application started".to_string(),
         service: "rust-app".to_string(),

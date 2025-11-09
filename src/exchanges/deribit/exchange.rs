@@ -1,5 +1,5 @@
 use super::models::{
-    Exchange, Greeks, MarketData, OrderbookData, PriceLevel, Stats24h, TickerData, TradeData,
+    Exchange, MarketData, OrderBookSnapshot, TradeSnapshot, TickerRow,
 };
 use crate::errors::{MarketDataError, Result};
 use async_trait::async_trait;
@@ -112,99 +112,96 @@ impl Deribit {
         Ok(())
     }
 
-    fn convert_grouped_book_to_market_data(&self, data: GroupedBookData) -> MarketData {
-        // Calculate best bid/ask from the book data
-        let best_bid_price = data.bids.first().map(|(price, _)| *price);
-        let best_bid_amount = data.bids.first().map(|(_, amount)| *amount);
-        let best_ask_price = data.asks.first().map(|(price, _)| *price);
-        let best_ask_amount = data.asks.first().map(|(_, amount)| *amount);
+    fn convert_grouped_book_to_market_data(data: GroupedBookData) -> MarketData {
+        use time::OffsetDateTime;
 
-        MarketData::Orderbook(OrderbookData {
-            exchange: "deribit".to_string(),
-            instrument_name: data.instrument_name.clone(),
-            timestamp: data.timestamp,
-            bids: data
-                .bids
-                .into_iter()
-                .map(|(price, amount)| PriceLevel { price, amount })
-                .collect(),
-            asks: data
-                .asks
-                .into_iter()
-                .map(|(price, amount)| PriceLevel { price, amount })
-                .collect(),
-            change_id: Some(data.change_id),
-            best_bid_price,
-            best_bid_amount,
-            best_ask_price,
-            best_ask_amount,
+        let timestamp = OffsetDateTime::from_unix_timestamp_nanos((data.timestamp as i128) * 1_000_000)
+            .unwrap_or_else(|_| OffsetDateTime::now_utc());
+        let ingestion_timestamp = OffsetDateTime::now_utc();
+
+        MarketData::Orderbook(OrderBookSnapshot {
+            symbol: data.instrument_name.clone(),
+            venue: "deribit".to_string(),
+            bids: data.bids,
+            asks: data.asks,
+            seq_id: data.change_id as u64,
+            instrument_class: None, // Not provided in Deribit book data
+            timestamp,
+            ingestion_timestamp,
         })
     }
 
-    fn convert_trades_to_market_data(&self, trades: Vec<DeribitTradesData>) -> Vec<MarketData> {
+    fn convert_trades_to_market_data(trades: Vec<DeribitTradesData>) -> Vec<MarketData> {
+        use time::OffsetDateTime;
+
         trades
             .into_iter()
             .map(|trade| {
-                MarketData::Trade(TradeData {
-                    exchange: "deribit".to_string(),
-                    instrument_name: trade.instrument_name.clone(),
-                    timestamp: trade.timestamp,
+                let timestamp = OffsetDateTime::from_unix_timestamp_nanos((trade.timestamp as i128) * 1_000_000)
+                    .unwrap_or_else(|_| OffsetDateTime::now_utc());
+                let ingestion_timestamp = OffsetDateTime::now_utc();
+
+                MarketData::Trade(TradeSnapshot {
+                    symbol: trade.instrument_name.clone(),
+                    venue: "deribit".to_string(),
                     trade_id: trade.trade_id,
-                    trade_seq: Some(trade.trade_seq),
                     price: trade.price,
                     amount: trade.amount,
-                    direction: format!("{:?}", trade.direction).to_lowercase(),
+                    side: format!("{:?}", trade.direction).to_lowercase(),
+                    seq_id: Some(trade.trade_seq),
+                    instrument_class: None,
+                    timestamp,
+                    ingestion_timestamp,
+                    contracts: Some(trade.amount), // Use amount as contracts
                     index_price: Some(trade.index_price),
                     mark_price: None, // Not provided in trades subscription
-                    iv: trade.iv,
-                    liquidation: trade.liquidation.map(|l| format!("{:?}", l)),
+                    tick_direction: Some(trade.tick_direction as i32),
                 })
             })
             .collect()
     }
 
-    fn convert_ticker_to_market_data(&self, ticker: DeribitTickerData) -> MarketData {
-        MarketData::Ticker(TickerData {
-            exchange: "deribit".to_string(),
-            instrument_name: ticker.instrument_name.clone(),
-            timestamp: ticker.timestamp,
-            last_price: ticker.last_price,
-            mark_price: ticker.mark_price,
-            index_price: ticker.index_price,
-            best_bid_price: ticker.best_bid_price,
-            best_ask_price: ticker.best_ask_price,
-            best_bid_amount: ticker.best_bid_amount,
-            best_ask_amount: ticker.best_ask_amount,
-            max_price: Some(ticker.max_price),
-            min_price: Some(ticker.min_price),
-            state: format!("{:?}", ticker.state).to_lowercase(),
-            open_interest: ticker.open_interest,
-            current_funding: ticker.current_funding,
-            funding_8h: ticker.funding_8h,
-            interest_value: None, // Not available in subscription data
+    fn convert_ticker_to_market_data(ticker: DeribitTickerData) -> MarketData {
+        use time::OffsetDateTime;
+
+        // Convert state to u8: open=1, closed=0
+        let state = match format!("{:?}", ticker.state).to_lowercase().as_str() {
+            "open" => 1,
+            _ => 0,
+        };
+
+        let ingestion_timestamp = OffsetDateTime::now_utc().unix_timestamp();
+
+        MarketData::Ticker(TickerRow {
+            timestamp: ticker.timestamp as i64,
+            ingestion_timestamp,
+            venue: "deribit".to_string(),
+            state,
+            symbol: ticker.instrument_name.clone(),
+            index_price: Some(ticker.index_price),
             settlement_price: ticker.settlement_price,
-            delivery_price: ticker.delivery_price,
-            estimated_delivery_price: Some(ticker.estimated_delivery_price),
+            open_interest: Some(ticker.open_interest),
+            mark_price: Some(ticker.mark_price),
+            best_bid_price: ticker.best_bid_price,
+            mark_iv: ticker.mark_iv,
             ask_iv: ticker.ask_iv,
             bid_iv: ticker.bid_iv,
-            mark_iv: ticker.mark_iv,
             underlying_price: ticker.underlying_price,
             underlying_index: ticker.underlying_index.clone(),
+            best_ask_price: ticker.best_ask_price,
             interest_rate: ticker.interest_rate,
-            greeks: ticker.greeks.map(|g| Greeks {
-                delta: g.delta,
-                gamma: g.gamma,
-                rho: g.rho,
-                theta: g.theta,
-                vega: g.vega,
-            }),
-            stats: Stats24h {
-                high: ticker.stats.high,
-                low: ticker.stats.low,
-                volume: ticker.stats.volume,
-                volume_usd: ticker.stats.volume_usd,
-                price_change: ticker.stats.price_change,
-            },
+            estimated_delivery_price: Some(ticker.estimated_delivery_price),
+            best_ask_amount: Some(ticker.best_ask_amount),
+            best_bid_amount: Some(ticker.best_bid_amount),
+            current_funding: ticker.current_funding,
+            delivery_price: ticker.delivery_price,
+            funding_8h: ticker.funding_8h,
+            interest_value: None, // Not available in subscription data
+            greeks_delta: ticker.greeks.as_ref().map(|g| g.delta),
+            greeks_gamma: ticker.greeks.as_ref().map(|g| g.gamma),
+            greeks_vega: ticker.greeks.as_ref().map(|g| g.vega),
+            greeks_theta: ticker.greeks.as_ref().map(|g| g.theta),
+            greeks_rho: ticker.greeks.as_ref().map(|g| g.rho),
         })
     }
 
@@ -302,30 +299,7 @@ impl Exchange for Deribit {
                         params: SubscriptionParams::Subscription(SubscriptionData::GroupedBook(data)),
                         ..
                     }) => {
-                        // Calculate best bid/ask from the book data
-                        let best_bid_price = data.data.bids.first().map(|(price, _)| *price);
-                        let best_bid_amount = data.data.bids.first().map(|(_, amount)| *amount);
-                        let best_ask_price = data.data.asks.first().map(|(price, _)| *price);
-                        let best_ask_amount = data.data.asks.first().map(|(_, amount)| *amount);
-
-                        let market_data = MarketData::Orderbook(OrderbookData {
-                            exchange: "deribit".to_string(),
-                            instrument_name: data.data.instrument_name.clone(),
-                            timestamp: data.data.timestamp,
-                            bids: data.data.bids
-                                .into_iter()
-                                .map(|(price, amount)| PriceLevel { price, amount })
-                                .collect(),
-                            asks: data.data.asks
-                                .into_iter()
-                                .map(|(price, amount)| PriceLevel { price, amount })
-                                .collect(),
-                            change_id: Some(data.data.change_id),
-                            best_bid_price,
-                            best_bid_amount,
-                            best_ask_price,
-                            best_ask_amount,
-                        });
+                        let market_data = Self::convert_grouped_book_to_market_data(data.data);
                         yield Ok(market_data);
                     }
                     Err(e) => {
@@ -383,21 +357,7 @@ impl Exchange for Deribit {
                         params: SubscriptionParams::Subscription(SubscriptionData::Trades(data)),
                         ..
                     }) => {
-                        for trade in data.data {
-                            let market_data = MarketData::Trade(TradeData {
-                                exchange: "deribit".to_string(),
-                                instrument_name: trade.instrument_name.clone(),
-                                timestamp: trade.timestamp,
-                                trade_id: trade.trade_id,
-                                trade_seq: Some(trade.trade_seq),
-                                price: trade.price,
-                                amount: trade.amount,
-                                direction: format!("{:?}", trade.direction).to_lowercase(),
-                                index_price: Some(trade.index_price),
-                                mark_price: None,
-                                iv: trade.iv,
-                                liquidation: trade.liquidation.map(|l| format!("{:?}", l)),
-                            });
+                        for market_data in Self::convert_trades_to_market_data(data.data) {
                             yield Ok(market_data);
                         }
                     }
@@ -456,48 +416,7 @@ impl Exchange for Deribit {
                         params: SubscriptionParams::Subscription(SubscriptionData::Ticker(data)),
                         ..
                     }) => {
-                        let market_data = MarketData::Ticker(TickerData {
-                            exchange: "deribit".to_string(),
-                            instrument_name: data.data.instrument_name.clone(),
-                            timestamp: data.data.timestamp,
-                            last_price: data.data.last_price,
-                            mark_price: data.data.mark_price,
-                            index_price: data.data.index_price,
-                            best_bid_price: data.data.best_bid_price,
-                            best_ask_price: data.data.best_ask_price,
-                            best_bid_amount: data.data.best_bid_amount,
-                            best_ask_amount: data.data.best_ask_amount,
-                            max_price: Some(data.data.max_price),
-                            min_price: Some(data.data.min_price),
-                            state: format!("{:?}", data.data.state).to_lowercase(),
-                            open_interest: data.data.open_interest,
-                            current_funding: data.data.current_funding,
-                            funding_8h: data.data.funding_8h,
-                            interest_value: None,
-                            settlement_price: data.data.settlement_price,
-                            delivery_price: data.data.delivery_price,
-                            estimated_delivery_price: Some(data.data.estimated_delivery_price),
-                            ask_iv: data.data.ask_iv,
-                            bid_iv: data.data.bid_iv,
-                            mark_iv: data.data.mark_iv,
-                            underlying_price: data.data.underlying_price,
-                            underlying_index: data.data.underlying_index.clone(),
-                            interest_rate: data.data.interest_rate,
-                            greeks: data.data.greeks.map(|g| Greeks {
-                                delta: g.delta,
-                                gamma: g.gamma,
-                                rho: g.rho,
-                                theta: g.theta,
-                                vega: g.vega,
-                            }),
-                            stats: Stats24h {
-                                high: data.data.stats.high,
-                                low: data.data.stats.low,
-                                volume: data.data.stats.volume,
-                                volume_usd: data.data.stats.volume_usd,
-                                price_change: data.data.stats.price_change,
-                            },
-                        });
+                        let market_data = Self::convert_ticker_to_market_data(data.data);
                         yield Ok(market_data);
                     }
                     Err(e) => {

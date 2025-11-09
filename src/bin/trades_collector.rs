@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     let kafka_producer = KafkaProducer::new(config.kafka.clone())?;
     let _kafka_consumer = KafkaConsumer::new(config.kafka.clone(), symbol_tx)?;
 
-    let redis_storage = RedisStorage::new(&config.redis.url)?;
+    let redis_storage = RedisStorage::new(&config.redis).await?;
 
     // Spawn health check server
     let health_port = config.health_check.port;

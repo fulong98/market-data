@@ -1,0 +1,41 @@
+[kafka]
+bootstrap_servers = "localhost:29092"
+orderbook_topic = "market-data-orderbook"
+trade_topic = "market-data-trades"
+ticker_topic = "market-data-ticker"
+
+[kafka.producer]
+timeout_ms = 5000
+max_reconnect_attempts = 3
+initial_backoff_ms = 1000
+send_timeout_ms = 100
+
+[kafka.consumer]
+instrument_topic = ""
+group_id = "market-data-collectors"
+
+[redis]
+url = "redis://127.0.0.1:6379"
+max_reconnect_attempts = 3
+initial_backoff_ms = 1000
+
+[clickhouse]
+host = "localhost"
+port = 9000
+user = "default"
+password = "password"
+database = "market_data"
+max_reconnect_attempts = 3
+initial_backoff_ms = 1000
+
+[logging]
+level = "info"
+format = "json"
+
+[health_check]
+port = 8079
+endpoint = "/health"
+
+[exchanges.deribit]
+enabled = true
+symbols = ["BTC-PERPETUAL", "ETH-PERPETUAL"]

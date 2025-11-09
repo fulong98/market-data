@@ -29,6 +29,12 @@ pub struct KafkaConfig {
 pub struct KafkaProducerConfig {
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
+    #[serde(default = "default_max_reconnect_attempts")]
+    pub max_reconnect_attempts: u32,
+    #[serde(default = "default_initial_backoff_ms")]
+    pub initial_backoff_ms: u64,
+    #[serde(default = "default_send_timeout_ms")]
+    pub send_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -45,9 +51,25 @@ fn default_group_id() -> String {
     "market-data-collectors".to_string()
 }
 
+fn default_max_reconnect_attempts() -> u32 {
+    3
+}
+
+fn default_initial_backoff_ms() -> u64 {
+    1000
+}
+
+fn default_send_timeout_ms() -> u64 {
+    100
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedisConfig {
     pub url: String,
+    #[serde(default = "default_max_reconnect_attempts")]
+    pub max_reconnect_attempts: u32,
+    #[serde(default = "default_initial_backoff_ms")]
+    pub initial_backoff_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +79,10 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
+    #[serde(default = "default_max_reconnect_attempts")]
+    pub max_reconnect_attempts: u32,
+    #[serde(default = "default_initial_backoff_ms")]
+    pub initial_backoff_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
