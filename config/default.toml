@@ -36,6 +36,13 @@ format = "json"
 port = 8079
 endpoint = "/health"
 
+[shutdown]
+total_timeout_ms = 5000
+task_join_timeout_ms = 2500
+kafka_flush_timeout_ms = 2000
+redis_drain_timeout_ms = 300
+exchange_unsubscribe_timeout_ms = 1000
+
 [exchanges.deribit]
 enabled = true
 symbols = ["BTC-PERPETUAL", "ETH-PERPETUAL"]

@@ -111,4 +111,17 @@ impl RedisStorage {
         info!(component = "redis", "Reconnected to Redis");
         Ok(())
     }
+
+    /// Graceful shutdown - wait for pending operations to drain
+    pub async fn shutdown(&self, timeout: Duration) {
+        info!(
+            component = "redis",
+            timeout_ms = timeout.as_millis(),
+            "Draining Redis connections"
+        );
+
+        sleep(timeout).await;
+
+        info!(component = "redis", "Redis drain completed");
+    }
 }

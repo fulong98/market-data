@@ -10,6 +10,8 @@ pub struct Config {
     pub clickhouse: ClickhouseConfig,
     pub logging: LoggingConfig,
     pub health_check: HealthCheckConfig,
+    #[serde(default)]
+    pub shutdown: ShutdownConfig,
     pub exchanges: HashMap<String, ExchangeConfig>,
 }
 
@@ -95,6 +97,40 @@ pub struct LoggingConfig {
 pub struct HealthCheckConfig {
     pub port: u16,
     pub endpoint: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ShutdownConfig {
+    #[serde(default = "default_total_timeout_ms")]
+    pub total_timeout_ms: u64,
+    #[serde(default = "default_task_join_timeout_ms")]
+    pub task_join_timeout_ms: u64,
+    #[serde(default = "default_kafka_flush_timeout_ms")]
+    pub kafka_flush_timeout_ms: u64,
+    #[serde(default = "default_redis_drain_timeout_ms")]
+    pub redis_drain_timeout_ms: u64,
+    #[serde(default = "default_exchange_unsubscribe_timeout_ms")]
+    pub exchange_unsubscribe_timeout_ms: u64,
+}
+
+fn default_total_timeout_ms() -> u64 {
+    5000
+}
+
+fn default_task_join_timeout_ms() -> u64 {
+    2500
+}
+
+fn default_kafka_flush_timeout_ms() -> u64 {
+    2000
+}
+
+fn default_redis_drain_timeout_ms() -> u64 {
+    300
+}
+
+fn default_exchange_unsubscribe_timeout_ms() -> u64 {
+    1000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

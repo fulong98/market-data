@@ -1,5 +1,5 @@
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use std::time::Duration;
 use crate::config::KafkaConfig;
 use crate::errors::{Result, MarketDataError};
@@ -150,5 +150,24 @@ impl KafkaProducer {
         // This would return producer stats if rdkafka provides them
         // For now, return a placeholder
         "Kafka producer statistics not yet implemented".to_string()
+    }
+
+    /// Flush pending messages with timeout for graceful shutdown
+    pub async fn flush(&self, timeout: Duration) -> Result<()> {
+        info!(
+            component = "kafka",
+            timeout_ms = timeout.as_millis(),
+            "Flushing Kafka producer"
+        );
+
+        self.client
+            .flush(timeout)
+            .map_err(|e| {
+                error!(component = "kafka", error = %e, "Kafka flush failed");
+                MarketDataError::KafkaError(e)
+            })?;
+
+        info!(component = "kafka", "Kafka flush completed successfully");
+        Ok(())
     }
 }

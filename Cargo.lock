@@ -1417,6 +1417,7 @@ dependencies = [
  "thiserror 2.0.17",
  "time",
  "tokio 1.48.0",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]

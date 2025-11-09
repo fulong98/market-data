@@ -230,6 +230,52 @@ impl Deribit {
             }
         });
     }
+
+    /// Unsubscribe from all channels with timeout for graceful shutdown
+    pub async fn unsubscribe_all_with_timeout(
+        &self,
+        timeout: std::time::Duration,
+        channel_type: &str,
+    ) -> Result<()> {
+        use tokio::time::timeout as tokio_timeout;
+
+        info!(
+            "Unsubscribing from all {} channels (timeout: {:?})",
+            channel_type, timeout
+        );
+
+        let symbols = self.subscribed_symbols.read().await.clone();
+        if symbols.is_empty() {
+            info!("No symbols to unsubscribe from");
+            return Ok(());
+        }
+
+        // Build channels based on type
+        let channels: Vec<String> = match channel_type {
+            "orderbook" => symbols
+                .iter()
+                .map(|s| format!("book.{}.none.10.100ms", s))
+                .collect(),
+            "trades" => symbols.iter().map(|s| format!("trades.{}.100ms", s)).collect(),
+            "ticker" => symbols.iter().map(|s| format!("ticker.{}.100ms", s)).collect(),
+            _ => return Ok(()),
+        };
+
+        // Unsubscribe with timeout
+        match tokio_timeout(timeout, self.unsubscribe_channels(channels)).await {
+            Ok(result) => {
+                info!("Successfully unsubscribed from {} channels", channel_type);
+                result
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "Timeout while unsubscribing from {} channels",
+                    channel_type
+                );
+                Ok(()) // Don't fail shutdown if unsubscribe times out
+            }
+        }
+    }
 }
 
 #[async_trait]
